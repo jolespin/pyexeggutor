@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 import sys, os, time, gzip, bz2, subprocess, pickle, json, logging, functools, hashlib
 from datetime import datetime
+from typing import TextIO
 import pathlib
 from tqdm import tqdm
 from memory_profiler import memory_usage
 # from pandas.errors import EmptyDataError
 
-__version__ = "2024.10.08"
+__version__ = "2024.10.15"
 
 # Read/Write
 # ==========
@@ -354,8 +355,8 @@ class RunShellCommand(object):
         self.validate_output_filepaths = validate_input_filepaths if validate_input_filepaths else list()
         self.executed = False
         
-    def run(self, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", **popen_kws):
-        def execute_command(encoding, stdout, stderr):
+    def run(self, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **popen_kws):
+        def execute_command(stdout, stderr):
             # Execute the process
             self.process_ = subprocess.Popen(
                 self.command,
@@ -363,44 +364,54 @@ class RunShellCommand(object):
                 stdout=stdout,
                 stderr=stderr,
                 executable=self.shell_executable,
+                universal_newlines=True,  # or text=True
+                bufsize=1,  # Line-buffered mode
                 **popen_kws,
             )
             # Wait until process is complete and return stdout/stderr
             self.stdout_, self.stderr_ = self.process_.communicate()
+
+            # Flush the buffers
+            if stdout is not None and hasattr(stdout, "flush"):
+                stdout.flush()
+            if stderr is not None and hasattr(stderr, "flush"):
+                stderr.flush()
+
+            # Capture return code
             self.returncode_ = self.process_.returncode
-            
-            # Encode
-            if encoding:
-                if self.stdout_:
-                    self.stdout_ = self.stdout_.decode(encoding)
-                if self.stderr_:
-                    self.stderr_ = self.stderr_.decode(encoding)
+
+            # # Encode
+            # if encoding:
+            #     if self.stdout_:
+            #         self.stdout_ = self.stdout_.decode(encoding)
+            #     if self.stderr_:
+            #         self.stderr_ = self.stderr_.decode(encoding)
 
         # I/O
         self.redirect_stdout = None
         if isinstance(stdout, str):
             self.redirect_stdout = stdout
-            stdout = open(stdout, "wb")
+            stdout = open(stdout, "w")
 
         self.redirect_stderr = None
         if isinstance(stderr, str):
             self.redirect_stderr = stderr
-            stderr = open(stderr, "wb")
+            stderr = open(stderr, "w")
 
         # Measure memory usage
         t0 = time.time()
         if self.validate_input_filepaths:
             for filepath in self.validate_input_filepaths:
                 check_file(filepath, empty_ok=False)
-        self.memory_usage_ = memory_usage((execute_command, (encoding, stdout, stderr,)), max_iterations=1)
+        self.memory_usage_ = memory_usage((execute_command, (stdout, stderr,)), max_iterations=1)
         self.duration_ = time.time() - t0
 
-        # # Flush
-        # if hasattr(stdout, "flush"):
-        #     stdout.flush()
-        # if hasattr(stderr, "flush"):
-        #     stderr.flush()
-            
+        # Flush
+        if hasattr(stdout, "flush"):
+            stdout.flush()
+        if hasattr(stderr, "flush"):
+            stderr.flush()
+
         # Close
         if hasattr(stdout, "close"):
             stdout.close()
@@ -411,6 +422,7 @@ class RunShellCommand(object):
         self.executed = True
 
         return self
+
 
     def __repr__(self):
         name_text = "{}(name:{})".format(self.__class__.__name__, self.name)
@@ -580,4 +592,18 @@ class DisplayablePath(object):
     @classmethod
     def view(cls, root, file=sys.stdout):
         print(cls.get_ascii(root), file=file)
+        
+# Genomics
+def fasta_writer(header:str, seq:str, file:TextIO, wrap:int=1000):
+    # Write the FASTA header
+    print(f">{header}", file=file)
+    
+    if wrap:
+        # Write the sequence with lines of length 'wrap'
+        for i in range(0, len(seq), wrap):
+            # Get a chunk of the sequence with a max length of 'wrap'
+            line = seq[i:i+wrap]
+            print(line, file=file)
+    else:
+        print(seq, file=file)
         

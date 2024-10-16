@@ -83,6 +83,20 @@ cmd.dump(log_directory)
 logger.info(f"[{cmd.name}] checking return code status: {cmd.returncode_}")
 cmd.check_status()
 ```
+### Miscellaenous
+#### Genomics
 
+```python
+import pyfastx # Not a dependency
+from pyexeggutor import (
+    open_file_writer,
+    fasta_writer, 
+)
+
+wrap = 1000 # Max 1000 characters per line, use 0 for no wrap
+with open_file_writer("output.fasta.gz") as f:
+    for id, seq in pyfastx.Fasta("path/to/input.fasta.gz", build_index=False):
+        fasta_writer(header=id, seq=seq, file=f, wrap=wrap)
+```
 ## Development Stage:
 * `beta`
