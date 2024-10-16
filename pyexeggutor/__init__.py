@@ -7,7 +7,7 @@ from tqdm import tqdm
 from memory_profiler import memory_usage
 # from pandas.errors import EmptyDataError
 
-__version__ = "2024.10.15"
+__version__ = "2024.10.16"
 
 # Read/Write
 # ==========
@@ -206,6 +206,21 @@ def get_timestamp(format_string:str="%Y-%m-%d %H:%M:%S"):
     now =  datetime.now()
     # Create a timestamp string
     return now.strftime(format_string)
+
+# Check argument choices
+def check_argument_choice(query, choices:set):
+    """_summary_
+
+    Args:
+        query (_type_): Query option
+        choices (set): Acceptable options
+
+    Raises:
+        ValueError: _description_
+    """
+    choices = set(choices)
+    if query not in choices:
+        raise ValueError(f"Invalid option '{query}'. Allowed choices are: {choices}")
 
 # Profiling
 # =========
