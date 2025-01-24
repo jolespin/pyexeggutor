@@ -1,13 +1,24 @@
 #!/usr/bin/env python
-import sys, os, time, gzip, bz2, subprocess, pickle, json, logging, functools, hashlib
+import sys
+import os
+import time
+import gzip
+import bz2
+import subprocess
+import pickle
+import json
+import logging
+import functools
+import hashlib
+import shutil
+import tarfile
 from datetime import datetime
 from typing import TextIO
 import pathlib
 from tqdm import tqdm
 from memory_profiler import memory_usage
-# from pandas.errors import EmptyDataError
 
-__version__ = "2024.10.16"
+__version__ = "2025.1.23"
 
 # Read/Write
 # ==========
@@ -81,6 +92,112 @@ def open_file_writer(filepath: str, compression="auto", binary=False):
     else:
         raise ValueError(f"Unsupported compression type: {compression}")
 
+def gzip_file(source_filepath: str, destination_filepath: str, logger=None):
+    """
+    Compress a source file using gzip and write it to a destination file.
+
+    Args:
+        source_filepath (str): Path to the source file to be gzipped.
+        destination_filepath (str): Path to the destination file to write the gzipped output.  
+	If directory, then uses basename from source_filepath and adds .gz extension
+
+    Returns:
+        None
+
+    Raises:
+        FileNotFoundError: If the source file does not exist.
+        IOError: If there are issues with reading or writing files.
+    """
+    try:
+        if os.path.isdir(destination_filepath):
+            destination_filepath = os.path.join(destination_filepath, os.path.basename(source_filepath) + ".gz")
+        with open(source_filepath, "rb") as src:
+            with gzip.open(destination_filepath, "wb") as dest:
+                shutil.copyfileobj(src, dest)
+        if logger:
+            logger.info(f" - Gzipping {source_filepath} --> {destination_filepath}")
+    except FileNotFoundError as e:
+        msg = f"Source file '{source_filepath}' not found: {e}"
+        if logger:
+            logger.critical(msg)
+        raise Exception(msg)
+    except IOError as e:
+        msg = f"An I/O error occurred while processing the files: {e}"
+        if logger:
+            logger.critical(msg)
+        raise Exception(msg)
+    
+import os
+import shutil
+
+
+def copy_file(source_filepath, destination_filepath, gzip=False, logger=None):
+    """
+    Copies a file or directory to a specified destination path. Supports both directory and specific file paths.
+    Optionally compresses files with gzip.
+
+    Parameters:
+        source_filepath (str): Path to the source file or directory to be copied.
+        destination_filepath (str): Path to the destination directory or file.
+        gzip (bool, optional): If True, compress the file using gzip before copying. Defaults to False.
+        logger (logging.Logger, optional): Logger for messages. Defaults to None.
+
+    Raises:
+        FileNotFoundError: If the source file or directory does not exist.
+        ValueError: If gzip is True and destination_filepath is not a directory.
+        IOError: If there are issues with reading or writing the file or directory.
+    """
+    # Check if the source exists
+    if not os.path.exists(source_filepath):
+        raise FileNotFoundError(f"Source path not found: {source_filepath}")
+
+    # Resolve symlink if the source is a symlink
+    if os.path.islink(source_filepath):
+        source_filepath = os.path.realpath(source_filepath)
+
+    # Determine the final destination path
+    if os.path.isdir(destination_filepath):
+        destination_filepath = os.path.join(destination_filepath, os.path.basename(source_filepath))
+
+    try:
+        if gzip:
+            if os.path.isdir(source_filepath):
+                msg = f"Gzip compression is not supported for directories: {source_filepath}"
+                if logger:
+                    logger.critical(msg)
+                raise ValueError(msg)
+
+            # Ensure destination_filepath is a directory
+            if not os.path.isdir(destination_filepath):
+                os.makedirs(destination_filepath, exist_ok=True)
+
+            if logger:
+                logger.info(f"Compressing and copying {source_filepath} to {destination_filepath}")
+
+            # Gzip compression (assumes a gzip_file function exists)
+            gzip_file(source_filepath, destination_filepath, logger=logger)
+        else:
+            if os.path.isdir(source_filepath):
+                if source_filepath.endswith("/"):
+                    subdirectory = source_filepath.split("/")[-2]
+                    destination_filepath = os.path.join(destination_filepath, subdirectory)
+                # Handle directories
+                if logger:
+                    logger.info(f" - Copying directory {source_filepath} --> {destination_filepath}")
+                shutil.copytree(source_filepath, destination_filepath, dirs_exist_ok=True)
+            else:
+                # Handle files
+                os.makedirs(os.path.dirname(destination_filepath), exist_ok=True)
+                if logger:
+                    logger.info(f" - Copying file {source_filepath} --> {destination_filepath}")
+                shutil.copy2(source_filepath, destination_filepath)
+
+    except IOError as e:
+        msg = f"Failed to copy {source_filepath} to {destination_filepath}: {e}"
+        if logger:
+            logger.critical(msg)
+        raise IOError(msg)
+
 # Pickle I/O
 def read_pickle(filepath, compression="auto"):
     with open_file_reader(filepath, compression=compression, binary=True) as f:
@@ -98,6 +215,35 @@ def read_json(filepath):
 def write_json(obj, filepath, indent=4):
     with open_file_writer(filepath, compression=None, binary=False) as f:
         return json.dump(obj, f)
+    
+# Archive
+# =======
+def archive_subdirectories(parent_directory:str, output_directory:str):
+    """
+    Creates .tar.gz archives for each subdirectory in the given parent directory.
+
+    Parameters:
+        parent_directory (str): Path to the directory containing subdirectories to archive.
+        output_directory (str): Path to the directory where archives will be saved.
+    """
+    # Ensure the output directory exists
+    os.makedirs(output_directory, exist_ok=True)
+
+    # Iterate through each subdirectory
+    for subdir in tqdm(os.listdir(parent_directory), "Creating archives", unit=" directories"):
+        subdir_path = os.path.join(parent_directory, subdir)
+
+        # Skip files; only process directories
+        if not os.path.isdir(subdir_path):
+            continue
+
+        # Define the archive name
+        archive_name = os.path.join(output_directory, f"{subdir}.tar.gz")
+
+        # Create the tar.gz archive
+        with tarfile.open(archive_name, "w:gz") as archive:
+            archive.add(subdir_path, arcname=subdir)
+            print(f"Archived: {subdir_path} -> {archive_name}", file=sys.stderr)
     
 # Formatting
 # ==========
@@ -167,6 +313,16 @@ def format_bytes(B, unit="auto", return_units=True):
 # Logging
 # =======
 def build_logger(logger_name=__name__, stream=sys.stdout):
+    """
+    Build a logger object that outputs to a given stream.
+
+    Args:
+        logger_name (str, optional): Name of the logger. Defaults to __name__.
+        stream (TextIO, optional): Where to output the logs. Defaults to sys.stdout.
+
+    Returns:
+        logging.Logger: The logger object.
+    """
     # Create a logger object
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)  # Set the logging level
@@ -185,6 +341,15 @@ def build_logger(logger_name=__name__, stream=sys.stdout):
     return logger
     
 def reset_logger(logger):
+    """
+    Reset the logger to remove all existing handlers and set a new handler to output to stdout.
+
+    Args:
+        logger (logging.Logger): The logger object to reset.
+
+    Returns:
+        None
+    """
     # Remove all existing handlers
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
@@ -202,6 +367,16 @@ def reset_logger(logger):
     
 # Timestamp
 def get_timestamp(format_string:str="%Y-%m-%d %H:%M:%S"):
+    """
+    Return a string representing the current date and time.
+
+    Args:
+        format_string (str): The format string to use when generating the timestamp string.
+            Defaults to "%Y-%m-%d %H:%M:%S".
+
+    Returns:
+        str: The timestamp string.
+    """
     # Get the current date and time
     now =  datetime.now()
     # Create a timestamp string
@@ -209,14 +384,21 @@ def get_timestamp(format_string:str="%Y-%m-%d %H:%M:%S"):
 
 # Check argument choices
 def check_argument_choice(query, choices:set):
-    """_summary_
 
-    Args:
-        query (_type_): Query option
-        choices (set): Acceptable options
+    """
+    Check that a given argument choice is in a set of allowed choices.
 
-    Raises:
-        ValueError: _description_
+    Raises
+    ------
+    ValueError
+        If the given argument choice is not in the set of allowed choices.
+
+    Parameters
+    ----------
+    query : str
+        The argument choice to check
+    choices : set
+        The set of allowed choices
     """
     choices = set(choices)
     if query not in choices:
@@ -225,6 +407,34 @@ def check_argument_choice(query, choices:set):
 # Profiling
 # =========
 def profile_peak_memory(func):
+    """
+    Decorator to measure and log the peak memory usage of a function.
+
+    Parameters
+    ----------
+    func : callable
+        The function to measure and log the peak memory usage of.
+
+    Returns
+    -------
+    callable
+        The decorated function.
+
+    Notes
+    -----
+    This decorator uses the `memory_usage` function from the `memory_profiler`
+    library to measure the memory usage of the decorated function. The peak
+    memory usage is then logged to the console.
+
+    Example
+    -------
+    >>> @profile_peak_memory
+    ... def my_function():
+    ...     # Do something that uses a lot of memory
+    ...     return
+    >>> my_function()
+    Peak memory usage for my_function: 123.45 MB
+    """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Measure memory usage
@@ -236,7 +446,61 @@ def profile_peak_memory(func):
 
 # Directory
 # =========
+def get_filepath_basename(filepath: str, compression: str = "auto"):
+    """
+    Return the base name of a file path without the file extension.
+
+    Parameters
+    ----------
+    filepath : str
+        The file path to extract the base name from
+    compression : str
+        The compression type of the file. Options are "auto", "gzip", "bz2", or None.
+
+    Returns
+    -------
+    str
+        The base name of the file
+    """
+    if "/" in filepath:
+        _, fn = os.path.split(filepath)
+    else:
+        fn = filepath
+
+    if compression == "auto":
+        if fn.endswith(".gz"):
+            compression = "gzip"
+        elif fn.endswith(".bz2"):
+            compression = "bz2"
+        else:
+            compression = None
+
+    if compression:
+        if compression == "gzip":
+            fn = fn[:-3]
+        elif compression == "bz2":
+            fn = fn[:-4]
+    if "." in fn:
+        return ".".join(fn.split(".")[:-1])
+    else:
+        return fn
+
 def get_file_size(filepath:str, format=False):
+    """
+    Get the size of a file.
+
+    Parameters
+    ----------
+    filepath : str
+        The file path of the file to get the size of.
+    format : bool
+        Whether to format the size in bytes to a human-readable format.
+
+    Returns
+    -------
+    int or str
+        The size of the file in bytes, or the size formatted as a string.
+    """
     size_in_bytes = os.stat(filepath).st_size
     if format:
         return format_bytes(size_in_bytes)
@@ -244,11 +508,79 @@ def get_file_size(filepath:str, format=False):
         return size_in_bytes
     
 def check_file(filepath:str, empty_ok=False, minimum_filesize=1): # Doesn't handle empty gzipped files
+    """
+    Check if a file exists and is not empty.
+
+    Parameters
+    ----------
+    filepath : str
+        The path to the file to check.
+    empty_ok : bool
+        Whether an empty file is allowed. Defaults to False.
+    minimum_filesize : int
+        The minimum size of the file in bytes. Defaults to 1.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist or is empty and `empty_ok` is False.
+    """
     if not os.path.exists(filepath):
         raise FileNotFoundError(filepath)
     if not empty_ok:
         if get_file_size(filepath) < minimum_filesize:
             raise FileNotFoundError(filepath)
+
+def get_executable_in_path(executable_name:str):
+    """
+    Check if an executable is in the PATH.
+
+    Parameters
+    ----------
+    executable_name : str
+        The name of the executable to check.
+
+    Returns
+    -------
+    str or None
+        The path to the executable, or None if it is not in the PATH.
+    """
+    return shutil.which(executable_name)
+
+def add_executables_to_environment(executable_names:list, environment:dict=os.environ, logger=None):
+    """
+    Add an executables to the environment.
+
+    Parameters
+    ----------
+    executable_names : list
+        A list of executable names to add to the environment.
+    environment : dict
+        The environment dictionary to add the executables to. [Default: `os.environ`]
+    logger : logging.Logger
+        Optional logger to output messages to.
+
+    Raises
+    ------
+    FileNotFoundError
+        If any of the executables are not found in the PATH.
+    """
+    for name in executable_names:
+        path = get_executable_in_path(name)
+        if path:
+            environment[name] = path
+            msg = f"Added {path} to environment"
+            if logger:
+                logger.info(msg)
+            else:
+                print(msg)
+
+        else:
+            msg = f"Could not find {name} executable in PATH"
+            if logger:
+                logger.error(f"Could not find {name} in PATH")
+            raise FileNotFoundError(msg)
+            
 
 # md5 hash from file
 def get_md5hash_from_file(filepath:str, block_size=65536):
@@ -290,6 +622,13 @@ def get_md5hash_from_directory(directory:str):
 
 # Get directory tree structure
 def get_directory_tree(root, ascii=False):
+    """
+    Get the directory tree structure as a string.
+
+    Parameters:
+    - root: The path to the root of the directory tree.
+    - ascii: Whether to return the directory tree as an ASCII string (default is False).
+    """
     if not ascii:
         return DisplayablePath.view(root)
     else:
@@ -610,6 +949,20 @@ class DisplayablePath(object):
         
 # Genomics
 def fasta_writer(header:str, seq:str, file:TextIO, wrap:int=1000):
+    """
+    Write a FASTA record to a file
+
+    Parameters
+    ----------
+    header : str
+        FASTA header
+    seq : str
+        FASTA sequence
+    file : TextIO
+        File to write the FASTA record to
+    wrap : int, optional
+        Wrap the sequence at this many characters, by default 1000
+    """
     # Write the FASTA header
     print(f">{header}", file=file)
     

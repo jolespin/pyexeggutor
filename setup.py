@@ -30,6 +30,9 @@ setup(name='pyexeggutor',
     packages=["pyexeggutor"],
     install_requires=requirements,
     include_package_data=False,
+    scripts=[
+        "bin/archive-subdirectories.py",
+    ],
 
 )
 
