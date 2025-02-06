@@ -18,7 +18,7 @@ import pathlib
 from tqdm import tqdm
 from memory_profiler import memory_usage
 
-__version__ = "2025.1.23"
+__version__ = "2025.2.6"
 
 # Read/Write
 # ==========
@@ -91,6 +91,35 @@ def open_file_writer(filepath: str, compression="auto", binary=False):
         return bz2.open(filepath, mode)
     else:
         raise ValueError(f"Unsupported compression type: {compression}")
+    
+
+def read_list(filepath:str, into=list, compression:str="auto", comment:str="#"):
+    """
+    Reads a file line-by-line into a list of strings.
+
+    Parameters:
+        filepath (str): path/to/file
+        into (callable): callable to convert the list of strings into a different data structure. Defaults to list.
+        compression (str, optional): {None, gzip, bz2}. Defaults to "auto".
+        comment (str, optional): the comment character to ignore. Defaults to "#".
+
+    Returns:
+        into: the converted list of strings
+    """
+    contents = list()
+    with open_file_reader(filepath, compression=compression) as f:
+        if comment:
+            for line in f:
+                line = line.strip()
+                if line:
+                    if not line.startswith(comment):
+                        contents.append(line)
+        else:
+            for line in f:
+                line = line.strip()
+                if line:
+                    contents.append(line)
+    return into(contents)
 
 def gzip_file(source_filepath: str, destination_filepath: str, logger=None):
     """
@@ -111,11 +140,12 @@ def gzip_file(source_filepath: str, destination_filepath: str, logger=None):
     try:
         if os.path.isdir(destination_filepath):
             destination_filepath = os.path.join(destination_filepath, os.path.basename(source_filepath) + ".gz")
+        if logger:
+            logger.info(f" - Gzipping {source_filepath} --> {destination_filepath}")
         with open(source_filepath, "rb") as src:
             with gzip.open(destination_filepath, "wb") as dest:
                 shutil.copyfileobj(src, dest)
-        if logger:
-            logger.info(f" - Gzipping {source_filepath} --> {destination_filepath}")
+
     except FileNotFoundError as e:
         msg = f"Source file '{source_filepath}' not found: {e}"
         if logger:
@@ -127,9 +157,6 @@ def gzip_file(source_filepath: str, destination_filepath: str, logger=None):
             logger.critical(msg)
         raise Exception(msg)
     
-import os
-import shutil
-
 
 def copy_file(source_filepath, destination_filepath, gzip=False, logger=None):
     """
@@ -147,6 +174,10 @@ def copy_file(source_filepath, destination_filepath, gzip=False, logger=None):
         ValueError: If gzip is True and destination_filepath is not a directory.
         IOError: If there are issues with reading or writing the file or directory.
     """
+    # Normalize
+    source_filepath = os.path.normpath(source_filepath)
+    destination_filepath = os.path.normpath(destination_filepath)
+    
     # Check if the source exists
     if not os.path.exists(source_filepath):
         raise FileNotFoundError(f"Source path not found: {source_filepath}")
@@ -154,10 +185,6 @@ def copy_file(source_filepath, destination_filepath, gzip=False, logger=None):
     # Resolve symlink if the source is a symlink
     if os.path.islink(source_filepath):
         source_filepath = os.path.realpath(source_filepath)
-
-    # Determine the final destination path
-    if os.path.isdir(destination_filepath):
-        destination_filepath = os.path.join(destination_filepath, os.path.basename(source_filepath))
 
     try:
         if gzip:
@@ -171,26 +198,46 @@ def copy_file(source_filepath, destination_filepath, gzip=False, logger=None):
             if not os.path.isdir(destination_filepath):
                 os.makedirs(destination_filepath, exist_ok=True)
 
-            if logger:
-                logger.info(f"Compressing and copying {source_filepath} to {destination_filepath}")
-
             # Gzip compression (assumes a gzip_file function exists)
             gzip_file(source_filepath, destination_filepath, logger=logger)
         else:
-            if os.path.isdir(source_filepath):
-                if source_filepath.endswith("/"):
-                    subdirectory = source_filepath.split("/")[-2]
+            # Ensure parent directory
+            parent_directory = os.path.dirname(destination_filepath)
+            if parent_directory:
+                os.makedirs(parent_directory, exist_ok=True)
+            # Source[File] --> Destination[File]
+            if all([
+                not os.path.isdir(source_filepath),
+                not os.path.isdir(destination_filepath),
+                ]):
+                if logger:
+                    logger.info(f" - Copying file {source_filepath} --> {destination_filepath}")
+                shutil.copy(source_filepath, destination_filepath)
+                
+            # Source[File] --> Destination[Directory]
+            elif all([
+                not os.path.isdir(source_filepath),
+                os.path.isdir(destination_filepath),
+                ]):
+                destination_filepath = os.path.join(destination_filepath, os.path.basename(source_filepath))
+                if logger:
+                    logger.info(f" - Copying file {source_filepath} --> {destination_filepath}")
+                shutil.copy(source_filepath, destination_filepath)
+            # Source[Directory] --> Destination[Directory]
+            elif os.path.isdir(source_filepath):
+                if os.path.exists(destination_filepath):
+                    if not os.path.isdir(destination_filepath):
+                        msg = f"If source is a directory, destination must be a directory: {source_filepath} -!-> {destination_filepath}"
+                        if logger:
+                            logger.critical(msg)
+                        raise ValueError(msg)
+                    subdirectory = source_filepath.split("/")[-1]
                     destination_filepath = os.path.join(destination_filepath, subdirectory)
                 # Handle directories
                 if logger:
                     logger.info(f" - Copying directory {source_filepath} --> {destination_filepath}")
                 shutil.copytree(source_filepath, destination_filepath, dirs_exist_ok=True)
-            else:
-                # Handle files
-                os.makedirs(os.path.dirname(destination_filepath), exist_ok=True)
-                if logger:
-                    logger.info(f" - Copying file {source_filepath} --> {destination_filepath}")
-                shutil.copy2(source_filepath, destination_filepath)
+
 
     except IOError as e:
         msg = f"Failed to copy {source_filepath} to {destination_filepath}: {e}"
@@ -312,9 +359,10 @@ def format_bytes(B, unit="auto", return_units=True):
         
 # Logging
 # =======
-def build_logger(logger_name=__name__, stream=sys.stdout):
+def build_logger(logger_name=__name__, stream=sys.stdout, level=logging.INFO):
     """
     Build a logger object that outputs to a given stream.
+    If a logger with the same name already exists, it is overwritten.
 
     Args:
         logger_name (str, optional): Name of the logger. Defaults to __name__.
@@ -323,18 +371,24 @@ def build_logger(logger_name=__name__, stream=sys.stdout):
     Returns:
         logging.Logger: The logger object.
     """
-    # Create a logger object
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)  # Set the logging level
+    # Check if the logger already exists and remove its handlers
+    if logger_name in logging.root.manager.loggerDict:
+        existing_logger = logging.getLogger(logger_name)
+        for handler in existing_logger.handlers[:]:
+            existing_logger.removeHandler(handler)
     
+    # Create or overwrite the logger
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)  # Set the logging level
+
     # Create a stream handler to output logs to stdout
     stream_handler = logging.StreamHandler(stream)
-    stream_handler.setLevel(logging.DEBUG)  # Set the level for the handler
-    
+    stream_handler.setLevel(level)  # Set the level for the handler
+
     # Create a formatter and set it to the handler
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     stream_handler.setFormatter(formatter)
-    
+
     # Add the handler to the logger
     logger.addHandler(stream_handler)
 
