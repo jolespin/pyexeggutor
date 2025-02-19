@@ -15,10 +15,10 @@ import tarfile
 from datetime import datetime
 from typing import TextIO
 import pathlib
-from tqdm import tqdm
+from tqdm import tqdm, tqdm_notebook
 from memory_profiler import memory_usage
 
-__version__ = "2025.2.6"
+__version__ = "2025.2.19"
 
 # Read/Write
 # ==========
@@ -498,6 +498,53 @@ def profile_peak_memory(func):
         return result
     return wrapper
 
+def pv(iterable, description=None, version=None, total=None, unit='it'):
+    """
+    Display a progress bar for an iterable using `tqdm`.
+
+    Parameters
+    ----------
+    iterable : iterable
+        The iterable to attach the progress bar to.
+    description : str, optional
+        A string describing the progress bar, displayed before it. Defaults to None.
+    version : str, optional
+        The version of `tqdm` to use. Can be "gui", "notebook", or None for the standard version. Defaults to None.
+    total : int, optional
+        The total number of iterations. If not provided, it will be determined automatically. Defaults to None.
+    unit : str, optional
+        The unit of measurement for each iteration. Defaults to 'it'.
+
+    Returns
+    -------
+    tqdm.std.tqdm or tqdm.notebook.tqdm or tqdm.gui.tqdm
+        An instance of the `tqdm` progress bar initialized with the specified parameters.
+
+    Raises
+    ------
+    ValueError
+        If `version` is not one of the allowed choices: None, "gui", or "notebook".
+
+    Notes
+    -----
+    This function is a wrapper for the `tqdm` library to create and display progress bars.
+    """
+
+    check_argument_choice(version, {None, "gui",  "notebook"})
+    func = tqdm
+    if version == "notebook":
+        func = tqdm_notebook
+    if version == "gui":
+        func = tqdm_gui
+
+    return tqdm(
+        iterable,
+        desc=description,
+        total=total,
+        unit=unit,
+   )
+    
+    
 # Directory
 # =========
 def get_filepath_basename(filepath: str, compression: str = "auto"):

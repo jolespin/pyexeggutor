@@ -1,4 +1,5 @@
 #### Change Log:
+* [2025.2.19] - Added `pv` wrapper for `tqdm`
 * [2025.2.6] - Added `read_list` function
 * [2025.2.6] - Added automatic overwrite for logs with same name via `logger` and set default level to `logging.INFO`
 * [2025.1.23] - Added `bin/archive-subdirectories.py` and scripts section in `setup.py`
