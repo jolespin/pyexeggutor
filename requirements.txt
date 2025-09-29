@@ -1,2 +1,3 @@
 tqdm
 memory_profiler
+loguru

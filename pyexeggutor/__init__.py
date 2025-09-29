@@ -18,7 +18,7 @@ import pathlib
 from tqdm import tqdm, tqdm_notebook
 from memory_profiler import memory_usage
 
-__version__ = "2025.2.19"
+__version__ = "2025.9.29"
 
 # Read/Write
 # ==========

@@ -32,6 +32,8 @@ setup(name='pyexeggutor',
     include_package_data=False,
     scripts=[
         "bin/archive-subdirectories.py",
+        "bin/ftp-downloader.py", # Needs bs4
+
     ],
 
 )

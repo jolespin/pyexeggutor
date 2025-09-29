@@ -1,4 +1,5 @@
 #### Change Log:
+* [2025.9.29] - Added `ftp-downloader.py`
 * [2025.2.19] - Added `pv` wrapper for `tqdm`
 * [2025.2.6] - Added `read_list` function
 * [2025.2.6] - Added automatic overwrite for logs with same name via `logger` and set default level to `logging.INFO`
@@ -9,3 +10,4 @@
 #### Pending:
 * `memory_profiler` does not work for `subprocess` shell commands.  Port to `psutils` instead.
 * Add support for [Jug](https://jug.readthedocs.io/en/latest/tutorial.html#example) for parallel tasks on different processors
+* Replace `build_logger` with `loguru`
