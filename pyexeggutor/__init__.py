@@ -18,7 +18,19 @@ import pathlib
 from tqdm import tqdm, tqdm_notebook
 from memory_profiler import memory_usage
 
-__version__ = "2025.9.29"
+__version__ = "2025.11.7"
+
+# import xxhash
+# def get_file_hash(filepath:str, mode="32", decompress=True, chunksize=8192):
+#     hasher = xxhash.xxh32()  # Create 32-bit xxHash object
+#     if decompress:
+#         f = open_file_reader(filepath, binary=True)
+#     else:
+#         f = open(filepath, "rb")
+#     while chunk := f.read(chunksize):  # Read in chunks of 8KB
+#         hasher.update(chunk)       # Update hash with chunk
+#     f.close()
+#     return hasher.hexdigest()         # Return hex digest of the hash
 
 # Read/Write
 # ==========
@@ -261,7 +273,7 @@ def read_json(filepath):
     
 def write_json(obj, filepath, indent=4):
     with open_file_writer(filepath, compression=None, binary=False) as f:
-        return json.dump(obj, f)
+        return json.dump(obj, f, indent=indent)
     
 # Archive
 # =======

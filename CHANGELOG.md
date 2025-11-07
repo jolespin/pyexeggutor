@@ -1,4 +1,5 @@
 #### Change Log:
+* [2025.11.7] - Added `indent=4` to `write_json`
 * [2025.9.29] - Added `ftp-downloader.py`
 * [2025.2.19] - Added `pv` wrapper for `tqdm`
 * [2025.2.6] - Added `read_list` function
