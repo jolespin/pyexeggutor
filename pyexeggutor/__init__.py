@@ -18,7 +18,7 @@ import pathlib
 from tqdm import tqdm, tqdm_notebook
 from memory_profiler import memory_usage
 
-__version__ = "2025.11.7"
+__version__ = "2025.12.1"
 
 # import xxhash
 # def get_file_hash(filepath:str, mode="32", decompress=True, chunksize=8192):
@@ -1088,3 +1088,22 @@ def fasta_writer(header:str, seq:str, file:TextIO, wrap:int=1000):
     else:
         print(seq, file=file)
         
+def fastq_writer(header: str, seq: str, quality: str, file: TextIO):
+    """
+    Write a FASTQ record to a file
+
+    Parameters
+    ----------
+    header : str
+        FASTQ header (without @ prefix)
+    seq : str
+        FASTQ sequence
+    quality : str
+        FASTQ quality scores (must be same length as seq)
+    file : TextIO
+        File to write the FASTQ record to
+    """
+    print(f"@{header}", file=file)
+    print(seq, file=file)
+    print("+", file=file)
+    print(quality, file=file)
