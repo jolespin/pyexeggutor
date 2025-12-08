@@ -13,24 +13,13 @@ import hashlib
 import shutil
 import tarfile
 from datetime import datetime
-from typing import TextIO
+from typing import Union, Set, TextIO
 import pathlib
-from tqdm import tqdm, tqdm_notebook
+from tqdm import tqdm, tqdm_notebook, tqdm_gui
 from memory_profiler import memory_usage
 
-__version__ = "2025.12.1"
+__version__ = "2025.12.5"
 
-# import xxhash
-# def get_file_hash(filepath:str, mode="32", decompress=True, chunksize=8192):
-#     hasher = xxhash.xxh32()  # Create 32-bit xxHash object
-#     if decompress:
-#         f = open_file_reader(filepath, binary=True)
-#     else:
-#         f = open(filepath, "rb")
-#     while chunk := f.read(chunksize):  # Read in chunks of 8KB
-#         hasher.update(chunk)       # Update hash with chunk
-#     f.close()
-#     return hasher.hexdigest()         # Return hex digest of the hash
 
 # Read/Write
 # ==========
@@ -1091,7 +1080,7 @@ def fasta_writer(header:str, seq:str, file:TextIO, wrap:int=1000):
 def fastq_writer(header: str, seq: str, quality: str, file: TextIO):
     """
     Write a FASTQ record to a file
-
+    
     Parameters
     ----------
     header : str
@@ -1103,7 +1092,77 @@ def fastq_writer(header: str, seq: str, quality: str, file: TextIO):
     file : TextIO
         File to write the FASTQ record to
     """
-    print(f"@{header}", file=file)
-    print(seq, file=file)
-    print("+", file=file)
-    print(quality, file=file)
+    # Single write operation is much faster than 4 separate prints
+    file.write(f"@{header}\n{seq}\n+\n{quality}\n")
+
+from typing import Union, Set, Optional, TextIO
+
+def parse_attribute_from_gff(
+    file: Union[str, TextIO], 
+    attribute_key: str, 
+    feature_type: Optional[Union[str, Set[str]]] = "CDS"
+):
+    """
+    Parse GFF file and yield (contig_id, attribute_value) for specified feature types.
+    
+    Parameters
+    ----------
+    file : str or file-like object
+        Path to GFF file (can be gzipped) or file handle (e.g., sys.stdin)
+    attribute_key : str
+        Attribute key to extract (e.g., 'locus_tag', 'gene_id')
+    feature_type : str, set of str, or None, default "CDS"
+        Feature type(s) to filter for (e.g., 'CDS', {'CDS', 'mRNA'}).
+        If None, all feature types are included.
+    
+    Yields
+    ------
+    tuple of (str, str)
+        (contig_id, attribute_value)
+    """
+    # Normalize feature_type to set for consistent handling
+    if feature_type is None:
+        feature_types = None  # Check all feature types
+    elif isinstance(feature_type, str):
+        feature_types = {feature_type}
+    else:
+        feature_types = set(feature_type)
+    
+    # Determine if we need to open/close the file
+    if isinstance(file, str):
+        f = open_file_reader(file)
+        should_close = True
+    else:
+        f = file
+        should_close = False
+    
+    try:
+        for line in tqdm(f, desc=f"Parsing GFF: {file}"):
+            # Skip comment/header lines
+            if line.startswith('#'):
+                continue
+            
+            fields = line.strip().split('\t')
+            
+            # GFF has 9 columns
+            if len(fields) < 9:
+                continue
+            
+            id_contig = fields[0]
+            feature = fields[2]
+            attributes = fields[8]
+            
+            # Check if this feature type matches (skip check if feature_types is None)
+            if feature_types is not None and feature not in feature_types:
+                continue
+            
+            # Parse attributes (format: key1=value1;key2=value2;...)
+            for attr in attributes.split(';'):
+                if '=' in attr:
+                    key, value = attr.split('=', 1)  # Split only on first '='
+                    if key == attribute_key:
+                        yield id_contig, value
+                        break  # Found the attribute, move to next line
+    finally:
+        if should_close:
+            f.close()

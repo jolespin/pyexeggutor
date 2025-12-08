@@ -1,4 +1,5 @@
 #### Change Log:
+* [2025.12.5] - Added `parse_attribute_from_gff`
 * [2025.12.1] - Added `fastq_writer`
 * [2025.11.7] - Added `indent=4` to `write_json`
 * [2025.9.29] - Added `ftp-downloader.py`
@@ -11,5 +12,5 @@
 
 #### Pending:
 * `memory_profiler` does not work for `subprocess` shell commands.  Port to `psutils` instead.
-* Add support for [Jug](https://jug.readthedocs.io/en/latest/tutorial.html#example) for parallel tasks on different processors
+* Add support for [Jug](https://jug.readthedocs.io/en/latest/tutorial.html#example) for parallel tasks on different processors or wrapper around `concurrent`
 * Replace `build_logger` with `loguru`
