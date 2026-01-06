@@ -1,4 +1,5 @@
 #### Change Log:
+* [2025.12.6] - Added `create_targz_from_directory`
 * [2025.12.5] - Added `parse_attribute_from_gff`
 * [2025.12.1] - Added `fastq_writer`
 * [2025.11.7] - Added `indent=4` to `write_json`

@@ -14,11 +14,11 @@ import shutil
 import tarfile
 from datetime import datetime
 from typing import Union, Set, TextIO
-import pathlib
+from pathlib import Path
 from tqdm import tqdm, tqdm_notebook, tqdm_gui
 from memory_profiler import memory_usage
 
-__version__ = "2025.12.5"
+__version__ = "2026.1.6"
 
 
 # Read/Write
@@ -292,6 +292,16 @@ def archive_subdirectories(parent_directory:str, output_directory:str):
         with tarfile.open(archive_name, "w:gz") as archive:
             archive.add(subdir_path, arcname=subdir)
             print(f"Archived: {subdir_path} -> {archive_name}", file=sys.stderr)
+
+def create_targz_from_directory(directory_path, archive_filepath):
+    directory_path = Path(directory_path)
+    if not directory_path.is_dir():
+        raise ValueError(f"Source must be a directory: {directory_path}")
+    archive_filepath = Path(archive_filepath)
+    archive_filepath.parent.mkdir(parents=True, exist_ok=True)  # Ensure output dir exists
+    with tarfile.open(archive_filepath, "w:gz") as tar:
+        tar.add(directory_path, arcname=directory_path.name)
+
     
 # Formatting
 # ==========
@@ -971,7 +981,7 @@ class DisplayablePath(object):
     display_parent_prefix_last = '|   '
 
     def __init__(self, path, parent_path, is_last):
-        self.path = pathlib.Path(str(path))
+        self.path = Path(str(path))
         self.parent = parent_path
         self.is_last = is_last
         if self.parent:
@@ -987,7 +997,7 @@ class DisplayablePath(object):
 
     @classmethod
     def make_tree(cls, root, parent=None, is_last=False, criteria=None):
-        root = pathlib.Path(str(root))
+        root = Path(str(root))
         criteria = criteria or cls._default_criteria
 
         displayable_root = cls(root, parent, is_last)
