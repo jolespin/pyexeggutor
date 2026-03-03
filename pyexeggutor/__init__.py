@@ -18,7 +18,7 @@ from pathlib import Path
 from tqdm import tqdm, tqdm_notebook, tqdm_gui
 from memory_profiler import memory_usage
 
-__version__ = "2026.1.6"
+__version__ = "2026.3.3"
 
 
 # Read/Write
@@ -1176,3 +1176,23 @@ def parse_attribute_from_gff(
     finally:
         if should_close:
             f.close()
+
+def parse_time_v(text: str) -> dict:
+    """Parse /usr/bin/time -v output, returning only the metrics block."""
+    lines = text.splitlines()
+    
+    # Find the start of the metrics block
+    start_idx = next(
+        (i for i, line in enumerate(lines) if line.strip().startswith("Command being timed:")),
+        None,
+    )
+    if start_idx is None:
+        raise ValueError("Could not find 'Command being timed:' in output")
+    
+    metrics = {}
+    for line in lines[start_idx:]:
+        if ": " in line:
+            key, _, value = line.strip().partition(": ")
+            metrics[key.strip()] = value.strip().strip('"')
+    
+    return metrics
