@@ -1,4 +1,5 @@
 #### Change Log:
+* [2026.3.3] - Using `entrypoints` instead of `bin/`
 * [2026.3.3] - Added `parse-time-v` executable which uses `parse_time_v` function
 * [2025.12.6] - Added `create_targz_from_directory`
 * [2025.12.5] - Added `parse_attribute_from_gff`

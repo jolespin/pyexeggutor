@@ -1,5 +1,4 @@
 from setuptools import setup
-import glob
 import os
 
 script_directory = os.path.abspath(os.path.dirname(__file__))
@@ -21,8 +20,6 @@ with open(os.path.join(script_directory, 'requirements.txt')) as f:
             if not line.startswith("#"):
                 requirements.append(line)
                 
-executables = glob.glob(os.path.join(script_directory, 'bin/*.py'))
-
 setup(name='pyexeggutor',
     version=version,
     description='Run shell commands in Python',
@@ -30,9 +27,14 @@ setup(name='pyexeggutor',
     author='Josh L. Espinoza',
     author_email='jol.espinoz@gmail.com',
     license='MIT',
-    packages=["pyexeggutor"],
+    packages=["pyexeggutor", "pyexeggutor.cli"],
     install_requires=requirements,
     include_package_data=False,
-    scripts=executables,
-)
+    entry_points={
+        "console_scripts": [
+            "parse-time-v=pyexeggutor.cli.parse_time_v:main",
+            "archive-subdirectories=pyexeggutor.cli.archive_subdirectories:main",
+            "ftp-downloader=pyexeggutor.cli.ftp_downloader:main",
+        ]
+    },)
 

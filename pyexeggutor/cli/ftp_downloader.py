@@ -8,7 +8,12 @@ import os
 import sys
 import requests
 from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+except ModuleNotFoundError as e:
+    print("To use `ftp-downloader` you must install `bs4` which is not a dependency for `pyexeggutor`\npip install bs4")
+    sys.exit(1)
+
 import time
 import argparse
 from pathlib import Path
