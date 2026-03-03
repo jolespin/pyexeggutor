@@ -10,7 +10,7 @@ from pyexeggutor import (
 def main():
     parser = argparse.ArgumentParser(description="Parse /usr/bin/time -v output files")
     parser.add_argument("filepaths", nargs="+", metavar="filepath")
-    parser.add_argument("-o", "--output", default="-", help="Output filepath [default: stdout]")
+    parser.add_argument("-o", "--output", default="stdout", help="Output filepath [default: stdout]")
     opts = parser.parse_args()
 
     records = []
@@ -22,7 +22,7 @@ def main():
 
     df = pd.DataFrame(records).set_index("filepath")
 
-    output = sys.stdout if opts.output == "-" else opts.output
+    output = sys.stdout if opts.output == "stdout" else opts.output
     df.to_csv(output, sep="\t")
 
 if __name__ == "__main__":

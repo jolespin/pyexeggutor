@@ -1,4 +1,5 @@
 from setuptools import setup
+import glob
 import os
 
 script_directory = os.path.abspath(os.path.dirname(__file__))
@@ -20,6 +21,8 @@ with open(os.path.join(script_directory, 'requirements.txt')) as f:
             if not line.startswith("#"):
                 requirements.append(line)
                 
+executables = glob.glob(os.path.join(script_directory, 'bin/*.py'))
+
 setup(name='pyexeggutor',
     version=version,
     description='Run shell commands in Python',
@@ -30,11 +33,6 @@ setup(name='pyexeggutor',
     packages=["pyexeggutor"],
     install_requires=requirements,
     include_package_data=False,
-    scripts=[
-        "bin/archive-subdirectories.py",
-        "bin/ftp-downloader.py", # Needs bs4
-
-    ],
-
+    scripts=executables,
 )
 
